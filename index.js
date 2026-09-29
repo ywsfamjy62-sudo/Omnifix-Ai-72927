@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
@@ -7,7 +8,12 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// نقطة استقبال الرسائل من الواجهة
+// 1. إرجاع ملف الواجهة عند فتح الرابط الرئيسي
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// 2. نقطة نهاية طلبات الشات
 app.post('/api/chat', async (req, res) => {
   const { message, images, plan } = req.body || {};
   const apiKey = process.env.GEMINI_API_KEY;
@@ -50,4 +56,3 @@ module.exports = app;
 if (process.env.NODE_ENV !== 'production') {
   app.listen(3000, () => console.log('Server running on port 3000'));
 }
-  
