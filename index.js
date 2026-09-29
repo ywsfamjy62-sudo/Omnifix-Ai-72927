@@ -1,19 +1,18 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// عرض الواجهة الرئيسية
+// عرض الصفحة الرئيسية
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// نقطة معالجة طلبات الذكاء الاصطناعي
+// معالجة طلبات المحادثة لدعم مفاتيح AQ الجديدة بمرونة
 app.post('/api/chat', async (req, res) => {
   const { message, images, plan } = req.body || {};
   const apiKey = process.env.GEMINI_API_KEY;
@@ -23,33 +22,50 @@ app.post('/api/chat', async (req, res) => {
   }
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    
-    // استخدام اسم النموذج الرسمي المتوافق
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      systemInstruction: `أنت مساعد OmniFix AI. الباقة الحالية: ${plan || 'العادية'}.`
-    });
-
-    const contents = [];
-    if (message) contents.push(message);
+    // تجهيز محتوى الرسائل
+    const parts = [];
+    if (message) parts.push({ text: message });
 
     if (images && Array.isArray(images)) {
       images.forEach(img => {
         if (typeof img === 'string' && img.startsWith('data:image')) {
           const base64Data = img.split(',')[1];
           const mimeType = img.split(';')[0].split(':')[1] || 'image/jpeg';
-          contents.push({ inlineData: { data: base64Data, mimeType } });
+          parts.push({
+            inline_data: { mime_type: mimeType, data: base64Data }
+          });
         }
       });
     }
 
-    const result = await model.generateContent(contents);
-    const response = await result.response;
+    // إرسال الطلب المباشر لتفادي أخطاء المكتبة مع المفاتيح الجديدة (AQ)
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts }],
+          systemInstruction: {
+            parts: [{ text: `أنت مساعد OmniFix AI. الباقة الحالية: ${plan || 'العادية'}.` }]
+          }
+        })
+      }
+    );
 
-    return res.status(200).json({ reply: response.text() });
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(500).json({ 
+        reply: `خطأ من جوجل (${response.status}): ` + (data.error?.message || 'تعذر معالجة الطلب') 
+      });
+    }
+
+    const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'لم يتم استلام نص.';
+    return res.status(200).json({ reply: replyText });
+
   } catch (error) {
-    return res.status(500).json({ reply: 'خطأ من الذكاء الاصطناعي: ' + error.message });
+    return res.status(500).json({ reply: 'خطأ في الاتصال: ' + error.message });
   }
 });
 
