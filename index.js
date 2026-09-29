@@ -8,22 +8,24 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// 1. إرجاع ملف الواجهة عند فتح الرابط الرئيسي
+// عرض الواجهة الرئيسية
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// 2. نقطة نهاية طلبات الشات
+// نقطة معالجة طلبات الذكاء الاصطناعي
 app.post('/api/chat', async (req, res) => {
   const { message, images, plan } = req.body || {};
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    return res.status(500).json({ reply: 'خطأ: لم يتم إضافة GEMINI_API_KEY في Vercel!' });
+    return res.status(500).json({ reply: 'خطأ: لم يتم إضافة GEMINI_API_KEY في إعدادات Vercel!' });
   }
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
+    
+    // استخدام اسم النموذج الرسمي المتوافق
     const model = genAI.getGenerativeModel({
       model: 'gemini-1.5-flash',
       systemInstruction: `أنت مساعد OmniFix AI. الباقة الحالية: ${plan || 'العادية'}.`
