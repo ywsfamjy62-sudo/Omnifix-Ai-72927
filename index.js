@@ -1,53 +1,53 @@
+const express = require('express');
+const cors = require('cors');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
-module.exports = async (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+const app = express();
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
 
-  if (req.method === 'POST') {
-    const { message, images, plan } = req.body || {};
-    const apiKey = process.env.GEMINI_API_KEY;
+app.post('/api/chat', async (req, res) => {
+  const { message, images, plan } = req.body || {};
+  const apiKey = process.env.GEMINI_API_KEY;
 
-    if (!message && (!images || images.length === 0)) {
-      return res.status(400).json({ reply: 'يرجى إدخال نص أو وسائط.' });
-    }
-
-    if (!apiKey) {
-      return res.status(500).json({ reply: 'خطأ: لم يتم ضبط GEMINI_API_KEY في Vercel.' });
-    }
-
-    try {
-      const genAI = new GoogleGenerativeAI(apiKey);
-      // استخدام موديل gemini-1.5-flash لمنع خطأ 404
-      const model = genAI.getGenerativeModel({
-        model: 'gemini-1.5-flash',
-        systemInstruction: `أنت مساعد OmniFix AI. الباقة الحالية: ${plan || 'العادية'}. أجب بدقة وبشكل ممتد وحل المشاكل الأكواد والنصوص.`
-      });
-
-      const contents = [];
-      if (message) contents.push(message);
-
-      if (images && Array.isArray(images)) {
-        images.forEach(img => {
-          if (img.startsWith('data:image')) {
-            const base64Data = img.split(',')[1];
-            const mimeType = img.split(';')[0].split(':')[1] || 'image/jpeg';
-            contents.push({ inlineData: { data: base64Data, mimeType } });
-          }
-        });
-      }
-
-      const result = await model.generateContent(contents);
-      const response = await result.response;
-
-      return res.status(200).json({ reply: response.text() });
-    } catch (error) {
-      return res.status(500).json({ reply: 'خطأ بالسيرفر: ' + error.message });
-    }
+  if (!apiKey) {
+    return res.status(500).json({ reply: 'خطأ: لم يتم إضافة GEMINI_API_KEY في Vercel!' });
   }
 
-  return res.status(200).send('OmniFix AI API Server Ready');
-};
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-1.5-flash',
+      systemInstruction: `أنت مساعد OmniFix AI. الباقة الحالية: ${plan || 'العادية'}.`
+    });
+
+    const contents = [];
+    if (message) contents.push(message);
+
+    if (images && Array.isArray(images)) {
+      images.forEach(img => {
+        if (typeof img === 'string' && img.startsWith('data:image')) {
+          const base64Data = img.split(',')[1];
+          const mimeType = img.split(';')[0].split(':')[1] || 'image/jpeg';
+          contents.push({ inlineData: { data: base64Data, mimeType } });
+        }
+      });
+    }
+
+    const result = await model.generateContent(contents);
+    const response = await result.response;
+
+    return res.status(200).json({ reply: response.text() });
+  } catch (error) {
+    return res.status(500).json({ reply: 'خطأ من الذكاء الاصطناعي: ' + error.message });
+  }
+});
+
+// تصدير السيرفر لـ Vercel
+module.exports = app;
+
+// للتشغيل المحلي فقط
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(3000, () => console.log('Server running on port 3000'));
+}
