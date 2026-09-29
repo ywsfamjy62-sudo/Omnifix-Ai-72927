@@ -7,12 +7,10 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// عرض الصفحة الرئيسية
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// معالجة طلبات المحادثة لدعم مفاتيح AQ الجديدة بمرونة
 app.post('/api/chat', async (req, res) => {
   const { message, images, plan } = req.body || {};
   const apiKey = process.env.GEMINI_API_KEY;
@@ -22,7 +20,6 @@ app.post('/api/chat', async (req, res) => {
   }
 
   try {
-    // تجهيز محتوى الرسائل
     const parts = [];
     if (message) parts.push({ text: message });
 
@@ -38,9 +35,32 @@ app.post('/api/chat', async (req, res) => {
       });
     }
 
-    // إرسال الطلب المباشر لتفادي أخطاء المكتبة مع المفاتيح الجديدة (AQ)
+    // 1. جلب قائمة النماذج المتاحة لمفتاحك تلقائياً لتفادي أخطاء 404
+    const modelsListResp = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+    );
+    const modelsListData = await modelsListResp.json();
+
+    if (!modelsListResp.ok) {
+      return res.status(500).json({
+        reply: `خطأ في المفتاح: ` + (modelsListData.error?.message || 'المفتاح غير صالح')
+      });
+    }
+
+    // اختيار أول نموذج يدعم توليد المحتوى (GenerateContent)
+    const availableModel = modelsListData.models?.find(m => 
+      m.supportedGenerationMethods?.includes('generateContent')
+    );
+
+    if (!availableModel) {
+      return res.status(500).json({ reply: 'لم يتم العثور على نموذج يدعم توليد المحتوى في حسابك.' });
+    }
+
+    const activeModelName = availableModel.name; // مثل models/gemini-2.5-flash
+
+    // 2. إرسال الطلب إلى النموذج المتاح تلقائياً
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/${activeModelName}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -56,12 +76,12 @@ app.post('/api/chat', async (req, res) => {
     const data = await response.json();
 
     if (!response.ok) {
-      return res.status(500).json({ 
-        reply: `خطأ من جوجل (${response.status}): ` + (data.error?.message || 'تعذر معالجة الطلب') 
+      return res.status(500).json({
+        reply: `خطأ من جوجل (${response.status}): ` + (data.error?.message || 'تعذر معالجة الطلب')
       });
     }
 
-    const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'لم يتم استلام نص.';
+    const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'تم استلام رد فارغ.';
     return res.status(200).json({ reply: replyText });
 
   } catch (error) {
