@@ -7,13 +7,13 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// مسار معالجة المحادثة
+// نقطة استقبال الرسائل من الواجهة
 app.post('/api/chat', async (req, res) => {
   const { message, images, plan } = req.body || {};
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    return res.status(500).json({ reply: 'خطأ: لم يتم إضافة GEMINI_API_KEY في إعدادات Vercel!' });
+    return res.status(500).json({ reply: 'خطأ: لم يتم إضافة GEMINI_API_KEY في Vercel!' });
   }
 
   try {
@@ -50,3 +50,4 @@ module.exports = app;
 if (process.env.NODE_ENV !== 'production') {
   app.listen(3000, () => console.log('Server running on port 3000'));
 }
+  
