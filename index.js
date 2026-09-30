@@ -35,54 +35,52 @@ app.post('/api/chat', async (req, res) => {
       });
     }
 
-    // 1. جلب قائمة النماذج المتاحة لمفتاحك تلقائياً لتفادي أخطاء 404
-    const modelsListResp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
-    );
-    const modelsListData = await modelsListResp.json();
+    // قائمة النماذج المرتبة حسب الأحدث والأفضل
+    const candidateModels = [
+      'gemini-3.8-flash',
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash'
+    ];
 
-    if (!modelsListResp.ok) {
-      return res.status(500).json({
-        reply: `خطأ في المفتاح: ` + (modelsListData.error?.message || 'المفتاح غير صالح')
-      });
-    }
+    let lastError = null;
+    let replyText = null;
 
-    // اختيار أول نموذج يدعم توليد المحتوى (GenerateContent)
-    const availableModel = modelsListData.models?.find(m => 
-      m.supportedGenerationMethods?.includes('generateContent')
-    );
-
-    if (!availableModel) {
-      return res.status(500).json({ reply: 'لم يتم العثور على نموذج يدعم توليد المحتوى في حسابك.' });
-    }
-
-    const activeModelName = availableModel.name; // مثل models/gemini-2.5-flash
-
-    // 2. إرسال الطلب إلى النموذج المتاح تلقائياً
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/${activeModelName}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts }],
-          systemInstruction: {
-            parts: [{ text: `أنت مساعد OmniFix AI. الباقة الحالية: ${plan || 'العادية'}.` }]
+    // التجربة على النماذج المتاحة بالتتابع حتى ينجح الطلب
+    for (const modelName of candidateModels) {
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts }],
+              systemInstruction: {
+                parts: [{ text: `أنت مساعد OmniFix AI. الباقة الحالية: ${plan || 'العادية'}.` }]
+              }
+            })
           }
-        })
+        );
+
+        const data = await response.json();
+
+        if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
+          replyText = data.candidates[0].content.parts[0].text;
+          break; // تم النجاح بنجاح والخروج من الحلقة
+        } else {
+          lastError = data.error?.message || `خطأ (${response.status})`;
+        }
+      } catch (err) {
+        lastError = err.message;
       }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return res.status(500).json({
-        reply: `خطأ من جوجل (${response.status}): ` + (data.error?.message || 'تعذر معالجة الطلب')
-      });
     }
 
-    const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text || 'تم استلام رد فارغ.';
-    return res.status(200).json({ reply: replyText });
+    if (replyText) {
+      return res.status(200).json({ reply: replyText });
+    } else {
+      return res.status(500).json({ reply: `خطأ من جوجل: ${lastError}` });
+    }
 
   } catch (error) {
     return res.status(500).json({ reply: 'خطأ في الاتصال: ' + error.message });
