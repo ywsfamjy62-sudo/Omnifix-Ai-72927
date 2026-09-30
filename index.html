@@ -63,7 +63,7 @@
     .send-btn { background: #2563eb; color: white; border: none; padding: 0 18px; height: 42px; border-radius: 10px; font-weight: bold; cursor: pointer; }
 
     /* Modal الباقات */
-    #plansModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 400; align-items: center; justify-content: center; padding: 15px; }
+    #plansModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 500; align-items: center; justify-content: center; padding: 15px; }
     #plansModal.active { display: flex !important; }
     .plans-container { background: #111827; border: 1px solid #1f2937; border-radius: 16px; width: 100%; max-width: 450px; max-height: 85vh; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
     .plan-card { background: #1f2937; border: 1px solid #374151; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
@@ -109,10 +109,9 @@
     </div>
   </div>
 
-  <!-- Modal الباقات -->
   <div id="plansModal">
     <div class="plans-container">
-      <h3>قائمة الباقات والترقيات</h3>
+      <h3 style="color:#3b82f6;">قائمة الباقات والترقيات</h3>
       <div id="plansList"></div>
       <button class="close-modal-btn" onclick="closePlansModal()">إغلاق</button>
     </div>
@@ -133,7 +132,7 @@
       { id: 'plan_3', name: 'باقة 3: الذكاء السريع', requiredAds: 3, durationHours: 12 },
       { id: 'plan_4', name: 'باقة 4: الباقة المتقدمة', requiredAds: 4, durationHours: 12 },
       { id: 'plan_5', name: 'باقة 5: باقة الذكاء الخارق', requiredAds: 5, durationHours: 12 },
-      { id: 'plan_vip', name: 'باقة 30: باقة VIP الإحترافية', requiredAds: 30, durationHours: 12 }
+      { id: 'plan_vip', name: 'باقة VIP الإحترافية', requiredAds: 30, durationHours: 12 }
     ];
 
     function init() {
@@ -199,9 +198,9 @@
         planData.activePlan = plan.name;
         planData.expiryTime = Date.now() + (plan.durationHours * 60 * 60 * 1000);
         planData.adCounts[planId] = 0;
-        alert(`🎉 تم تفعيل ${plan.name} بنجاح لمدة ${plan.durationHours} ساعة!`);
+        alert(`🎉 تم تفعيل ${plan.name} بنجاح!`);
       } else {
-        alert(`تمت مشاهدة الإعلان (${currentCount}/${plan.requiredAds}). أكمل المشاهدات لتفعيل الباقة.`);
+        alert(`تم المشاهدة (${currentCount}/${plan.requiredAds}).`);
       }
 
       savePlanData();
@@ -221,8 +220,8 @@
           <div class="plan-info">
             <span class="plan-title">${plan.name}</span>
             <div>
-              <span class="tag">⏱️ ${plan.durationHours} ساعة</span>
-              <span class="tag">📺 ${plan.requiredAds} إعلان</span>
+              <span class="tag">⏱️ ${plan.durationHours}س</span>
+              <span class="tag">📺 ${plan.requiredAds} إعلانات</span>
             </div>
           </div>
           <button class="watch-ad-btn" onclick="watchAd('${plan.id}')">
@@ -261,7 +260,7 @@
 
     function deleteChat(id, event) {
       event.stopPropagation();
-      if (confirm('هل ترغب في حذف هذه المحادثة؟')) {
+      if (confirm('حذف المحادثة؟')) {
         chats = chats.filter(c => c.id !== id);
         saveChats();
         if (chats.length === 0) createNewChat();
@@ -287,7 +286,7 @@
 
         const delBtn = document.createElement('button');
         delBtn.className = 'delete-chat-btn';
-        delBtn.textContent = '🗑️️';
+        delBtn.textContent = '🗑';
         delBtn.onclick = function(e) { deleteChat(chat.id, e); };
 
         item.appendChild(titleSpan);
@@ -302,7 +301,7 @@
       const currentChat = chats.find(c => c.id === currentChatId);
 
       if (!currentChat || currentChat.messages.length === 0) {
-        chatBox.innerHTML = '<div class="hero-card"><h2 style="color: #3b82f6;">OmniFix AI</h2><p style="color: #9ca3af; font-size: 13px; margin-top: 5px;">المساعد الذكي المتكامل للدردشة والنصوص والصور والفيديوهات.</p></div>';
+        chatBox.innerHTML = '<div class="hero-card"><h2 style="color: #3b82f6;">OmniFix AI</h2><p style="color: #9ca3af; font-size: 13px; margin-top: 5px;">المساعد الذكي المتكامل للدردشة والوسائط.</p></div>';
         return;
       }
 
@@ -339,19 +338,15 @@
 
     function handleMediaSelect(event) {
       const files = Array.from(event.target.files);
-      
       if (selectedMediaList.length + files.length > 5) {
-        alert('الحد الأقصى هو 5 صور أو فيديوهات في المرة الواحدة!');
+        alert('الحد الأقصى هو 5 ملفات!');
         return;
       }
 
       files.forEach(file => {
         const reader = new FileReader();
         reader.onload = function(e) {
-          selectedMediaList.push({
-            type: file.type,
-            data: e.target.result
-          });
+          selectedMediaList.push({ type: file.type, data: e.target.result });
           renderMediaPreview();
         };
         reader.readAsDataURL(file);
