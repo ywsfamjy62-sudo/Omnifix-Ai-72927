@@ -11,6 +11,35 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
+// دالة المحاولة مع النماذج المتاحة
+async function askGemini(parts, apiKey) {
+  // قائمة النماذج المتاحة للتنقل بينها في حال وجود ضغط على أحدها
+  const models = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
+
+  for (const model of models) {
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: parts }] })
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
+        return { success: true, text: data.candidates[0].content.parts[0].text };
+      }
+    } catch (e) {
+      continue;
+    }
+  }
+
+  return { success: false };
+}
+
 app.post('/api/chat', async (req, res) => {
   const { message, media } = req.body || {};
   const apiKey = process.env.GEMINI_API_KEY;
@@ -20,13 +49,8 @@ app.post('/api/chat', async (req, res) => {
   }
 
   try {
-    // اسم النموذج الرسمي المتاح حالياً فقط
-    const model = 'gemini-3.8-flash';
     const parts = [];
-
-    if (message) {
-      parts.push({ text: message });
-    }
+    if (message) parts.push({ text: message });
 
     if (media && Array.isArray(media)) {
       media.forEach(item => {
@@ -42,32 +66,18 @@ app.post('/api/chat', async (req, res) => {
       });
     }
 
-    if (parts.length === 0) {
-      parts.push({ text: 'مرحبا' });
-    }
+    if (parts.length === 0) parts.push({ text: 'مرحبا' });
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: parts }]
-        })
-      }
-    );
+    const result = await askGemini(parts, apiKey);
 
-    const data = await response.json();
-
-    if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
-      return res.status(200).json({ reply: data.candidates[0].content.parts[0].text });
+    if (result.success) {
+      return res.status(200).json({ reply: result.text });
     } else {
-      const errMsg = data.error?.message || 'حدث خطأ في معالجة الطلب';
-      return res.status(500).json({ reply: 'خطأ من الذكاء الاصطناعي: ' + errMsg });
+      return res.status(500).json({ reply: 'السيرفر مشغول حالياً، يرجى المحاولة بعد لحظات.' });
     }
 
   } catch (error) {
-    return res.status(500).json({ reply: 'خطأ في الاتصال بالسيرفر: ' + error.message });
+    return res.status(500).json({ reply: 'خطأ في الاتصال: ' + error.message });
   }
 });
 
