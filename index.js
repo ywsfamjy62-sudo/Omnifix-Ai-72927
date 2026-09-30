@@ -20,17 +20,15 @@ app.post('/api/chat', async (req, res) => {
   }
 
   try {
-    // قائمة بالنماذج الحديثة الشغالة حالياً في Google Gemini API
-    const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
-    let replyText = null;
-    let lastError = null;
-
+    // استخدام النموذج الحديث المتاح حالياً لمنع خطأ not found
+    const model = 'gemini-2.5-flash';
     const parts = [];
+
     if (message) {
       parts.push({ text: message });
     }
 
-    // إضافة الصور والفيديوهات إلى أجزاء الطلب
+    // إرسال الصور والفيديوهات إن وجدت
     if (media && Array.isArray(media)) {
       media.forEach(item => {
         const matches = item.data.match(/^data:(.+);base64,(.+)$/);
@@ -49,35 +47,24 @@ app.post('/api/chat', async (req, res) => {
       parts.push({ text: 'مرحبا' });
     }
 
-    for (const model of models) {
-      try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: parts }]
-            })
-          }
-        );
-
-        const data = await response.json();
-        if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
-          replyText = data.candidates[0].content.parts[0].text;
-          break;
-        } else {
-          lastError = data.error?.message || `Status: ${response.status}`;
-        }
-      } catch (err) {
-        lastError = err.message;
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: parts }]
+        })
       }
-    }
+    );
 
-    if (replyText) {
-      return res.status(200).json({ reply: replyText });
+    const data = await response.json();
+
+    if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
+      return res.status(200).json({ reply: data.candidates[0].content.parts[0].text });
     } else {
-      return res.status(500).json({ reply: 'حدث خطأ من الذكاء الاصطناعي: ' + lastError });
+      const errMsg = data.error?.message || 'حدث خطأ في معالجة الطلب';
+      return res.status(500).json({ reply: 'خطأ من الذكاء الاصطناعي: ' + errMsg });
     }
 
   } catch (error) {
