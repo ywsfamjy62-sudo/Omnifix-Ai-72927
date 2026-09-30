@@ -20,12 +20,11 @@ app.post('/api/chat', async (req, res) => {
   }
 
   try {
-    // تحديث قائمة النماذج بأسماء النماذج المعتمدة والحديثة من Google Gemini
-    const models = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-2.5-flash'];
+    // قائمة بالنماذج المتاحة والمدعومة حالياً من Google Gemini
+    const models = ['gemini-1.5-flash', 'gemini-1.5-pro'];
     let replyText = null;
     let lastError = null;
 
-    // تجهيز الإدخال (محتوى نصي مع صوَر إن وجدت)
     const parts = [];
     if (message) {
       parts.push({ text: message });
@@ -74,11 +73,11 @@ app.post('/api/chat', async (req, res) => {
     if (replyText) {
       return res.status(200).json({ reply: replyText });
     } else {
-      return res.status(500).json({ reply: 'خطأ من جوجل: ' + lastError });
+      return res.status(500).json({ reply: 'حدث خطأ أثناء الاتصال بالذكاء الاصطناعي: ' + lastError });
     }
 
   } catch (error) {
-    return res.status(500).json({ reply: 'خطأ في الاتصال: ' + error.message });
+    return res.status(500).json({ reply: 'خطأ في الاتصال بالسيرفر: ' + error.message });
   }
 });
 
