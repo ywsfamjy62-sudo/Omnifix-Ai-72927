@@ -1,88 +1,438 @@
-const express = require('express');
-const cors = require('cors');
-const path = require('path');
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OmniFix AI</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { background-color: #0b0f19; color: #ffffff; display: flex; height: 100vh; overflow: hidden; }
 
-const app = express();
+    #overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 290; }
+    #overlay.active { display: block; }
 
-app.use(cors());
-app.use(express.json({ limit: '20mb' }));
-
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-app.post('/api/chat', async (req, res) => {
-  const { message, image } = req.body || {};
-  const apiKey = process.env.GEMINI_API_KEY;
-
-  if (!apiKey) {
-    return res.status(500).json({ reply: 'خطأ: لم يتم إضافة GEMINI_API_KEY في إعدادات Vercel!' });
-  }
-
-  try {
-    // قائمة بالنماذج المتاحة والمدعومة حالياً من Google Gemini
-    const models = ['gemini-1.5-flash', 'gemini-1.5-pro'];
-    let replyText = null;
-    let lastError = null;
-
-    const parts = [];
-    if (message) {
-      parts.push({ text: message });
+    #sidebar {
+      width: 280px; background-color: #111827; border-left: 1px solid #1f2937;
+      display: flex; flex-direction: column; transition: transform 0.3s ease; position: fixed; right: 0; top: 0; bottom: 0; z-index: 300;
+      transform: translateX(100%);
     }
-    if (image) {
-      const matches = image.match(/^data:(.+);base64,(.+)$/);
-      if (matches) {
-        parts.push({
-          inline_data: {
-            mime_type: matches[1],
-            data: matches[2]
-          }
-        });
+    #sidebar.open { transform: translateX(0); }
+    
+    .sidebar-header { padding: 15px; border-bottom: 1px solid #1f2937; display: flex; gap: 10px; align-items: center; }
+    .new-chat-btn { flex: 1; padding: 10px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; }
+    .close-sidebar-btn { background: #374151; color: white; border: none; width: 36px; height: 36px; border-radius: 8px; font-size: 18px; cursor: pointer; }
+    
+    .chat-list { flex: 1; overflow-y: auto; padding: 10px; }
+    .chat-item {
+      padding: 12px; margin-bottom: 8px; background: #1f2937; border-radius: 8px;
+      cursor: pointer; font-size: 14px; color: #d1d5db; display: flex; justify-content: space-between; align-items: center;
+    }
+    .chat-item.active { border-right: 4px solid #2563eb; background: #374151; color: #fff; }
+    .chat-title-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; margin-left: 8px; }
+    .delete-chat-btn { background: none; border: none; color: #ef4444; font-size: 16px; cursor: pointer; padding: 2px 6px; }
+
+    .main-container { flex: 1; display: flex; flex-direction: column; height: 100vh; width: 100%; }
+
+    header { height: 60px; background: #111827; border-bottom: 1px solid #1f2937; display: flex; align-items: center; justify-content: space-between; padding: 0 15px; }
+    .toggle-btn { background: none; border: none; color: white; font-size: 22px; cursor: pointer; }
+    .app-title { color: #3b82f6; font-weight: bold; font-size: 18px; }
+
+    .plan-badge { border: 1px solid #374151; padding: 5px 12px; border-radius: 8px; font-size: 12px; text-align: center; cursor: pointer; background: #1f2937; }
+    .plan-badge.active { border-color: #10b981; background: rgba(16, 185, 129, 0.15); }
+    .plan-badge span { display: block; color: #f59e0b; font-weight: bold; }
+    .plan-badge.active span { color: #10b981; }
+
+    .chat-box { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 15px; padding-bottom: 150px; }
+    .hero-card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 25px; text-align: center; margin: auto; max-width: 380px; }
+
+    .message { max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; word-wrap: break-word; }
+    .message.user { align-self: flex-start; background: #2563eb; color: white; }
+    .message.bot { align-self: stretch; background: transparent; color: #e5e7eb; white-space: pre-wrap; }
+    .media-gallery { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+    .message-media { max-width: 150px; max-height: 150px; border-radius: 8px; object-fit: cover; }
+
+    .input-area { position: fixed; bottom: 15px; left: 10px; right: 10px; background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .preview-list { display: none; gap: 8px; overflow-x: auto; padding: 4px 0; }
+    .preview-item { position: relative; width: 50px; height: 50px; flex-shrink: 0; }
+    .preview-item img, .preview-item video { width: 100%; height: 100%; border-radius: 6px; object-fit: cover; }
+    .remove-media-btn { position: absolute; top: -5px; right: -5px; background: #ef4444; color: white; border: none; border-radius: 50%; width: 18px; height: 18px; font-size: 10px; cursor: pointer; }
+
+    .input-box { display: flex; gap: 8px; align-items: center; }
+    .input-box input[type="text"] { flex: 1; background: #1f2937; border: none; color: white; padding: 12px 15px; border-radius: 10px; font-size: 14px; outline: none; }
+    .upload-btn { background: #374151; color: white; border: none; width: 42px; height: 42px; border-radius: 10px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .send-btn { background: #2563eb; color: white; border: none; padding: 0 18px; height: 42px; border-radius: 10px; font-weight: bold; cursor: pointer; }
+
+    /* Modal الباقات */
+    #plansModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 400; align-items: center; justify-content: center; padding: 15px; }
+    #plansModal.active { display: flex; }
+    .plans-container { background: #111827; border: 1px solid #1f2937; border-radius: 16px; width: 100%; max-width: 450px; max-height: 85vh; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+    .plan-card { background: #1f2937; border: 1px solid #374151; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .plan-info { display: flex; justify-content: space-between; align-items: center; }
+    .plan-title { font-weight: bold; color: #3b82f6; font-size: 15px; }
+    .tag { background: #374151; padding: 2px 8px; border-radius: 6px; font-size: 11px; color: #f59e0b; }
+    .watch-ad-btn { background: #2563eb; color: white; border: none; padding: 8px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 13px; }
+    .close-modal-btn { background: #ef4444; color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+  </style>
+</head>
+<body>
+
+  <div id="overlay" onclick="closeSidebar()"></div>
+
+  <div id="sidebar">
+    <div class="sidebar-header">
+      <button class="new-chat-btn" onclick="createNewChat()">+ محادثة جديدة</button>
+      <button class="close-sidebar-btn" onclick="closeSidebar()">×</button>
+    </div>
+    <div class="chat-list" id="chatList"></div>
+  </div>
+
+  <div class="main-container">
+    <header>
+      <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
+      <div class="app-title">OmniFix AI</div>
+      <div class="plan-badge" id="planBadge" onclick="openPlansModal()">
+        <span id="currentPlanName">الباقة العادية</span>
+        <small id="currentPlanStatus">غير مفعلة</small>
+      </div>
+    </header>
+
+    <div class="chat-box" id="chatBox"></div>
+
+    <div class="input-area">
+      <div class="preview-list" id="previewList"></div>
+      <div class="input-box">
+        <!-- دعم تحديد حتى 5 صور وفيديوهات -->
+        <input type="file" id="mediaInput" accept="image/*,video/*" multiple style="display: none;" onchange="handleMediaSelect(event)">
+        <button class="upload-btn" onclick="document.getElementById('mediaInput').click()" title="إضافة صور أو فيديوهات">➕</button>
+        <input type="text" id="userInput" placeholder="اكتب رسالتك هنا..." onkeydown="if(event.key==='Enter') sendMessage()">
+        <button class="send-btn" onclick="sendMessage()">إرسال</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal الباقات -->
+  <div id="plansModal">
+    <div class="plans-container">
+      <h3>قائمة الباقات والترقيات</h3>
+      <div id="plansList"></div>
+      <button class="close-modal-btn" onclick="closePlansModal()">إغلاق</button>
+    </div>
+  </div>
+
+  <script>
+    let chats = JSON.parse(localStorage.getItem('omni_chats')) || [];
+    let currentChatId = null;
+    let selectedMediaList = []; // مصفوفة الوسائط المحددة (حد أقصى 5)
+
+    let planData = JSON.parse(localStorage.getItem('omni_plan_data')) || {
+      activePlan: null,
+      expiryTime: null,
+      adCounts: {}
+    };
+
+    const plansConfig = [
+      { id: 'plan_3', name: 'باقة 3: الذكاء السريع', requiredAds: 3, durationHours: 12 },
+      { id: 'plan_4', name: 'باقة 4: الباقة المتقدمة', requiredAds: 4, durationHours: 12 },
+      { id: 'plan_5', name: 'باقة 5: باقة الذكاء الخارق', requiredAds: 5, durationHours: 12 },
+      { id: 'plan_vip', name: 'باقة 30: باقة VIP الإحترافية', requiredAds: 30, durationHours: 12 }
+    ];
+
+    function init() {
+      checkPlanExpiry();
+      renderChatList();
+      if (chats.length === 0) createNewChat();
+      else selectChat(chats[0].id);
+      updatePlanBadge();
+    }
+
+    function checkPlanExpiry() {
+      if (planData.expiryTime && Date.now() > planData.expiryTime) {
+        planData.activePlan = null;
+        planData.expiryTime = null;
+        savePlanData();
       }
     }
 
-    if (parts.length === 0) {
-      parts.push({ text: 'مرحبا' });
+    function savePlanData() {
+      localStorage.setItem('omni_plan_data', JSON.stringify(planData));
+      updatePlanBadge();
     }
 
-    for (const model of models) {
+    function updatePlanBadge() {
+      checkPlanExpiry();
+      const badge = document.getElementById('planBadge');
+      const nameEl = document.getElementById('currentPlanName');
+      const statusEl = document.getElementById('currentPlanStatus');
+
+      if (planData.activePlan) {
+        badge.classList.add('active');
+        nameEl.textContent = planData.activePlan;
+        
+        const remainingMs = planData.expiryTime - Date.now();
+        const hoursLeft = Math.floor(remainingMs / (1000 * 60 * 60));
+        const minsLeft = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+        statusEl.textContent = `مفعّلة (متبقي ${hoursLeft}س ${minsLeft}د)`;
+      } else {
+        badge.classList.remove('active');
+        nameEl.textContent = 'الباقة العادية';
+        statusEl.textContent = 'غير مفعلة';
+      }
+    }
+
+    function openPlansModal() {
+      renderPlansList();
+      document.getElementById('plansModal').classList.add('active');
+    }
+
+    function closePlansModal() {
+      document.getElementById('plansModal').classList.remove('active');
+    }
+
+    function watchAd(planId) {
+      const plan = plansConfig.find(p => p.id === planId);
+      if (!plan) return;
+
+      let currentCount = planData.adCounts[planId] || 0;
+      currentCount++;
+      planData.adCounts[planId] = currentCount;
+
+      if (currentCount >= plan.requiredAds) {
+        planData.activePlan = plan.name;
+        planData.expiryTime = Date.now() + (plan.durationHours * 60 * 60 * 1000);
+        planData.adCounts[planId] = 0;
+        alert(`🎉 تم تفعيل ${plan.name} بنجاح لمدة ${plan.durationHours} ساعة!`);
+      } else {
+        alert(`تمت مشاهدة الإعلان (${currentCount}/${plan.requiredAds}). أكمل المشاهدات لتفعيل الباقة.`);
+      }
+
+      savePlanData();
+      renderPlansList();
+    }
+
+    function renderPlansList() {
+      const container = document.getElementById('plansList');
+      container.innerHTML = '';
+
+      plansConfig.forEach(plan => {
+        const count = planData.adCounts[plan.id] || 0;
+        const card = document.createElement('div');
+        card.className = 'plan-card';
+
+        card.innerHTML = `
+          <div class="plan-info">
+            <span class="plan-title">${plan.name}</span>
+            <div>
+              <span class="tag">⏱️ ${plan.durationHours} ساعة</span>
+              <span class="tag">📺 ${plan.requiredAds} إعلان</span>
+            </div>
+          </div>
+          <button class="watch-ad-btn" onclick="watchAd('${plan.id}')">
+            مشاهدة الإعلان (${count}/${plan.requiredAds})
+          </button>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('open');
+      document.getElementById('overlay').classList.toggle('active');
+    }
+
+    function closeSidebar() {
+      document.getElementById('sidebar').classList.remove('open');
+      document.getElementById('overlay').classList.remove('active');
+    }
+
+    function createNewChat() {
+      const newChat = { id: Date.now(), title: 'محادثة جديدة', messages: [] };
+      chats.unshift(newChat);
+      saveChats();
+      renderChatList();
+      selectChat(newChat.id);
+      closeSidebar();
+    }
+
+    function selectChat(id) {
+      currentChatId = id;
+      renderChatList();
+      renderMessages();
+      closeSidebar();
+    }
+
+    function deleteChat(id, event) {
+      event.stopPropagation();
+      if (confirm('هل ترغب في حذف هذه المحادثة؟')) {
+        chats = chats.filter(c => c.id !== id);
+        saveChats();
+        if (chats.length === 0) createNewChat();
+        else selectChat(chats[0].id);
+      }
+    }
+
+    function saveChats() {
+      localStorage.setItem('omni_chats', JSON.stringify(chats));
+    }
+
+    function renderChatList() {
+      const list = document.getElementById('chatList');
+      list.innerHTML = '';
+      chats.forEach(chat => {
+        const item = document.createElement('div');
+        item.className = 'chat-item ' + (chat.id === currentChatId ? 'active' : '');
+        item.onclick = function() { selectChat(chat.id); };
+        
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'chat-title-text';
+        titleSpan.textContent = chat.title;
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'delete-chat-btn';
+        delBtn.textContent = '🗑️';
+        delBtn.onclick = function(e) { deleteChat(chat.id, e); };
+
+        item.appendChild(titleSpan);
+        item.appendChild(delBtn);
+        list.appendChild(item);
+      });
+    }
+
+    function renderMessages() {
+      const chatBox = document.getElementById('chatBox');
+      chatBox.innerHTML = '';
+      const currentChat = chats.find(c => c.id === currentChatId);
+
+      if (!currentChat || currentChat.messages.length === 0) {
+        chatBox.innerHTML = '<div class="hero-card"><h2 style="color: #3b82f6;">OmniFix AI</h2><p style="color: #9ca3af; font-size: 13px; margin-top: 5px;">المساعد الذكي المتكامل للدردشة والنصوص والصور والفيديوهات.</p></div>';
+        return;
+      }
+
+      currentChat.messages.forEach(msg => {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'message ' + msg.sender;
+
+        if (msg.media && msg.media.length > 0) {
+          const gallery = document.createElement('div');
+          gallery.className = 'media-gallery';
+          msg.media.forEach(m => {
+            if (m.type.startsWith('image/')) {
+              const img = document.createElement('img');
+              img.src = m.data;
+              img.className = 'message-media';
+              gallery.appendChild(img);
+            } else if (m.type.startsWith('video/')) {
+              const video = document.createElement('video');
+              video.src = m.data;
+              video.controls = true;
+              video.className = 'message-media';
+              gallery.appendChild(video);
+            }
+          });
+          msgDiv.appendChild(gallery);
+        }
+
+        const textNode = document.createTextNode(msg.text);
+        msgDiv.appendChild(textNode);
+        chatBox.appendChild(msgDiv);
+      });
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    // معالجة اختيار حتى 5 صور وفيديوهات
+    function handleMediaSelect(event) {
+      const files = Array.from(event.target.files);
+      
+      if (selectedMediaList.length + files.length > 5) {
+        alert('الحد الأقصى هو 5 صور أو فيديوهات في المرة الواحدة!');
+        return;
+      }
+
+      files.forEach(file => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          selectedMediaList.push({
+            type: file.type,
+            data: e.target.result
+          });
+          renderMediaPreview();
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function removeMedia(index) {
+      selectedMediaList.splice(index, 1);
+      renderMediaPreview();
+    }
+
+    function renderMediaPreview() {
+      const container = document.getElementById('previewList');
+      container.innerHTML = '';
+
+      if (selectedMediaList.length === 0) {
+        container.style.display = 'none';
+        return;
+      }
+
+      container.style.display = 'flex';
+      selectedMediaList.forEach((m, idx) => {
+        const item = document.createElement('div');
+        item.className = 'preview-item';
+
+        if (m.type.startsWith('image/')) {
+          item.innerHTML = `<img src="${m.data}"><button class="remove-media-btn" onclick="removeMedia(${idx})">×</button>`;
+        } else if (m.type.startsWith('video/')) {
+          item.innerHTML = `<video src="${m.data}"></video><button class="remove-media-btn" onclick="removeMedia(${idx})">×</button>`;
+        }
+        container.appendChild(item);
+      });
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById('userInput');
+      const text = input.value.trim();
+      const media = [...selectedMediaList];
+
+      if (!text && media.length === 0) return;
+
+      const currentChat = chats.find(c => c.id === currentChatId);
+      if (currentChat.messages.length === 0) {
+        currentChat.title = text ? text.substring(0, 20) : 'محادثة وسائط';
+        renderChatList();
+      }
+
+      currentChat.messages.push({ sender: 'user', text: text, media: media });
+      
+      // تفريغ الحقول
+      selectedMediaList = [];
+      renderMediaPreview();
+      document.getElementById('mediaInput').value = '';
+      input.value = '';
+      renderMessages();
+
+      const botMsg = { sender: 'bot', text: 'جاري التفكير...' };
+      currentChat.messages.push(botMsg);
+      renderMessages();
+
       try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: parts }]
-            })
-          }
-        );
+        const response = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text, media: media })
+        });
 
         const data = await response.json();
-        if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
-          replyText = data.candidates[0].content.parts[0].text;
-          break;
-        } else {
-          lastError = data.error?.message || `Status: ${response.status}`;
-        }
+        botMsg.text = data.reply || 'تم استلام الرد.';
       } catch (err) {
-        lastError = err.message;
+        botMsg.text = 'تعذر الاتصال بالسيرفر.';
       }
+
+      saveChats();
+      renderMessages();
     }
 
-    if (replyText) {
-      return res.status(200).json({ reply: replyText });
-    } else {
-      return res.status(500).json({ reply: 'حدث خطأ أثناء الاتصال بالذكاء الاصطناعي: ' + lastError });
-    }
-
-  } catch (error) {
-    return res.status(500).json({ reply: 'خطأ في الاتصال بالسيرفر: ' + error.message });
-  }
-});
-
-module.exports = app;
-
-if (process.env.NODE_ENV !== 'production') {
-  app.listen(3000, () => console.log('Server running on port 3000'));
-}
+    setInterval(updatePlanBadge, 60000);
+    init();
+  </script>
+</body>
+</html>
