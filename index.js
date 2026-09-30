@@ -5,14 +5,14 @@ const path = require('path');
 const app = express();
 
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '20mb' }));
 
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 app.post('/api/chat', async (req, res) => {
-  const { message } = req.body || {};
+  const { message, image } = req.body || {};
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
@@ -20,10 +20,31 @@ app.post('/api/chat', async (req, res) => {
   }
 
   try {
-    // أسماء النماذج المتاحة والمدعومة
-    const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+    // تحديث قائمة النماذج بأسماء النماذج المعتمدة والحديثة من Google Gemini
+    const models = ['gemini-3.8-flash', 'gemini-3.6-flash', 'gemini-2.5-flash'];
     let replyText = null;
     let lastError = null;
+
+    // تجهيز الإدخال (محتوى نصي مع صوَر إن وجدت)
+    const parts = [];
+    if (message) {
+      parts.push({ text: message });
+    }
+    if (image) {
+      const matches = image.match(/^data:(.+);base64,(.+)$/);
+      if (matches) {
+        parts.push({
+          inline_data: {
+            mime_type: matches[1],
+            data: matches[2]
+          }
+        });
+      }
+    }
+
+    if (parts.length === 0) {
+      parts.push({ text: 'مرحبا' });
+    }
 
     for (const model of models) {
       try {
@@ -33,7 +54,7 @@ app.post('/api/chat', async (req, res) => {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              contents: [{ parts: [{ text: message || 'مرحبا' }] }]
+              contents: [{ parts: parts }]
             })
           }
         );
@@ -41,7 +62,7 @@ app.post('/api/chat', async (req, res) => {
         const data = await response.json();
         if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
           replyText = data.candidates[0].content.parts[0].text;
-          break; // نجاح الاتصال وتلقي الرد
+          break;
         } else {
           lastError = data.error?.message || `Status: ${response.status}`;
         }
