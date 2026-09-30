@@ -8,7 +8,7 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
     body { background-color: #0b0f19; color: #ffffff; display: flex; height: 100vh; overflow: hidden; }
 
-    #overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 290; }
+    #overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 290; }
     #overlay.active { display: block; }
 
     #sidebar {
@@ -38,7 +38,9 @@
     .app-title { color: #3b82f6; font-weight: bold; font-size: 18px; }
 
     .plan-badge { border: 1px solid #374151; padding: 5px 12px; border-radius: 8px; font-size: 12px; text-align: center; cursor: pointer; background: #1f2937; }
+    .plan-badge.active { border-color: #10b981; background: rgba(16, 185, 129, 0.15); }
     .plan-badge span { display: block; color: #f59e0b; font-weight: bold; }
+    .plan-badge.active span { color: #10b981; }
 
     .chat-box { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 15px; padding-bottom: 140px; }
     .hero-card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 25px; text-align: center; margin: auto; max-width: 380px; }
@@ -57,6 +59,20 @@
     .input-box input[type="text"] { flex: 1; background: #1f2937; border: none; color: white; padding: 12px 15px; border-radius: 10px; font-size: 14px; outline: none; }
     .upload-btn { background: #374151; color: white; border: none; width: 42px; height: 42px; border-radius: 10px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
     .send-btn { background: #2563eb; color: white; border: none; padding: 0 18px; height: 42px; border-radius: 10px; font-weight: bold; cursor: pointer; }
+
+    /* نافذة الباقات Modal */
+    #plansModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 400; align-items: center; justify-content: center; padding: 15px; }
+    #plansModal.active { display: flex; }
+    .plans-container { background: #111827; border: 1px solid #1f2937; border-radius: 16px; width: 100%; max-width: 450px; max-height: 85vh; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+    .plans-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .plan-card { background: #1f2937; border: 1px solid #374151; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .plan-info { display: flex; justify-content: space-between; align-items: center; }
+    .plan-title { font-weight: bold; color: #3b82f6; font-size: 15px; }
+    .plan-tags { display: flex; gap: 6px; }
+    .tag { background: #374151; padding: 2px 8px; border-radius: 6px; font-size: 11px; color: #f59e0b; }
+    .watch-ad-btn { background: #2563eb; color: white; border: none; padding: 8px; border-radius: 8px; font-weight: bold; cursor: pointer; text-align: center; font-size: 13px; }
+    .watch-ad-btn:disabled { background: #4b5563; cursor: not-allowed; }
+    .close-modal-btn { background: #ef4444; color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px; }
   </style>
 </head>
 <body>
@@ -75,9 +91,9 @@
     <header>
       <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
       <div class="app-title">OmniFix AI</div>
-      <div class="plan-badge">
-        <span>الباقة العادية</span>
-        <small>غير مفعلة</small>
+      <div class="plan-badge" id="planBadge" onclick="openPlansModal()">
+        <span id="currentPlanName">الباقة العادية</span>
+        <small id="currentPlanStatus">غير مفعلة</small>
       </div>
     </header>
 
@@ -98,15 +114,131 @@
     </div>
   </div>
 
+  <!-- Modal الباقات -->
+  <div id="plansModal">
+    <div class="plans-container">
+      <div class="plans-header">
+        <h3>قائمة الباقات والترقيات</h3>
+      </div>
+      <div id="plansList"></div>
+      <button class="close-modal-btn" onclick="closePlansModal()">إغلاق</button>
+    </div>
+  </div>
+
   <script>
     let chats = JSON.parse(localStorage.getItem('omni_chats')) || [];
     let currentChatId = null;
     let selectedImageBase64 = null;
 
+    // حالة الباقات المفعّلة وعدد الإعلانات المشاهدة
+    let planData = JSON.parse(localStorage.getItem('omni_plan_data')) || {
+      activePlan: null,
+      expiryTime: null,
+      adCounts: {}
+    };
+
+    const plansConfig = [
+      { id: 'plan_3', name: 'باقة 3: إعلانات عامة', requiredAds: 3, durationHours: 12 },
+      { id: 'plan_4', name: 'باقة 4: ذكاء سريع', requiredAds: 4, durationHours: 12 },
+      { id: 'plan_5', name: 'باقة 5: الباقة المتقدمة', requiredAds: 5, durationHours: 12 },
+      { id: 'plan_vip', name: 'باقة VIP الإحترافية', requiredAds: 30, durationHours: 12 }
+    ];
+
     function init() {
+      checkPlanExpiry();
       renderChatList();
       if (chats.length === 0) createNewChat();
       else selectChat(chats[0].id);
+      updatePlanBadge();
+    }
+
+    function checkPlanExpiry() {
+      if (planData.expiryTime && Date.now() > planData.expiryTime) {
+        planData.activePlan = null;
+        planData.expiryTime = null;
+        savePlanData();
+      }
+    }
+
+    function savePlanData() {
+      localStorage.setItem('omni_plan_data', JSON.stringify(planData));
+      updatePlanBadge();
+    }
+
+    function updatePlanBadge() {
+      checkPlanExpiry();
+      const badge = document.getElementById('planBadge');
+      const nameEl = document.getElementById('currentPlanName');
+      const statusEl = document.getElementById('currentPlanStatus');
+
+      if (planData.activePlan) {
+        badge.classList.add('active');
+        nameEl.textContent = planData.activePlan;
+        
+        const remainingMs = planData.expiryTime - Date.now();
+        const hoursLeft = Math.floor(remainingMs / (1000 * 60 * 60));
+        const minsLeft = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+        statusEl.textContent = `مفعّلة (متبقي ${hoursLeft}س ${minsLeft}د)`;
+      } else {
+        badge.classList.remove('active');
+        nameEl.textContent = 'الباقة العادية';
+        statusEl.textContent = 'غير مفعلة';
+      }
+    }
+
+    function openPlansModal() {
+      renderPlansList();
+      document.getElementById('plansModal').classList.add('active');
+    }
+
+    function closePlansModal() {
+      document.getElementById('plansModal').classList.remove('active');
+    }
+
+    function watchAd(planId) {
+      const plan = plansConfig.find(p => p.id === planId);
+      if (!plan) return;
+
+      let currentCount = planData.adCounts[planId] || 0;
+      currentCount++;
+      planData.adCounts[planId] = currentCount;
+
+      if (currentCount >= plan.requiredAds) {
+        planData.activePlan = plan.name;
+        planData.expiryTime = Date.now() + (plan.durationHours * 60 * 60 * 1000);
+        planData.adCounts[planId] = 0; // إعادة تعيين العداد بعد التفعيل
+        alert(`🎉 تهانينا! تم تفعيل ${plan.name} بنجاح لمدة ${plan.durationHours} ساعة.`);
+      } else {
+        alert(`تمت مشاهدة إعلان (${currentCount}/${plan.requiredAds}). شاهد المتبقي لتفعيل الباقة.`);
+      }
+
+      savePlanData();
+      renderPlansList();
+    }
+
+    function renderPlansList() {
+      const container = document.getElementById('plansList');
+      container.innerHTML = '';
+
+      plansConfig.forEach(plan => {
+        const count = planData.adCounts[plan.id] || 0;
+        const card = document.createElement('div');
+        card.className = 'plan-card';
+
+        card.innerHTML = `
+          <div class="plan-info">
+            <span class="plan-title">${plan.name}</span>
+            <div class="plan-tags">
+              <span class="tag">⏱️ ${plan.durationHours} ساعة</span>
+              <span class="tag">📺 ${plan.requiredAds} إعلانات</span>
+            </div>
+          </div>
+          <button class="watch-ad-btn" onclick="watchAd('${plan.id}')">
+            مشاهدة الإعلان (${count}/${plan.requiredAds})
+          </button>
+        `;
+        container.appendChild(card);
+      });
     }
 
     function toggleSidebar() {
@@ -258,6 +390,7 @@
       renderMessages();
     }
 
+    setInterval(updatePlanBadge, 60000); // تحديث الوقت المتبقي كل دقيقة
     init();
   </script>
 </body>
