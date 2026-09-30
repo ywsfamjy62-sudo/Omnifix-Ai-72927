@@ -20,15 +20,16 @@ app.post('/api/chat', async (req, res) => {
   }
 
   try {
-    // استخدام النموذج الحديث المتاح حالياً لمنع خطأ not found
-    const model = 'gemini-2.5-flash';
-    const parts = [];
+    // التحديث للنموذج المطلوب والمحدد من جوجل
+    const models = ['gemini-3.8-flash', 'gemini-2.0-flash'];
+    let replyText = null;
+    let lastError = null;
 
+    const parts = [];
     if (message) {
       parts.push({ text: message });
     }
 
-    // إرسال الصور والفيديوهات إن وجدت
     if (media && Array.isArray(media)) {
       media.forEach(item => {
         const matches = item.data.match(/^data:(.+);base64,(.+)$/);
@@ -47,24 +48,35 @@ app.post('/api/chat', async (req, res) => {
       parts.push({ text: 'مرحبا' });
     }
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: parts }]
-        })
+    for (const model of models) {
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: parts }]
+            })
+          }
+        );
+
+        const data = await response.json();
+        if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
+          replyText = data.candidates[0].content.parts[0].text;
+          break;
+        } else {
+          lastError = data.error?.message || `Status: ${response.status}`;
+        }
+      } catch (err) {
+        lastError = err.message;
       }
-    );
+    }
 
-    const data = await response.json();
-
-    if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
-      return res.status(200).json({ reply: data.candidates[0].content.parts[0].text });
+    if (replyText) {
+      return res.status(200).json({ reply: replyText });
     } else {
-      const errMsg = data.error?.message || 'حدث خطأ في معالجة الطلب';
-      return res.status(500).json({ reply: 'خطأ من الذكاء الاصطناعي: ' + errMsg });
+      return res.status(500).json({ reply: 'خطأ من الذكاء الاصطناعي: ' + lastError });
     }
 
   } catch (error) {
