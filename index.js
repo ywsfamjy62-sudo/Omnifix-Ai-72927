@@ -12,7 +12,7 @@ app.get('/', (req, res) => {
 });
 
 app.post('/api/chat', async (req, res) => {
-  const { message, images, plan } = req.body || {};
+  const { message } = req.body || {};
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
@@ -20,56 +20,30 @@ app.post('/api/chat', async (req, res) => {
   }
 
   try {
-    const parts = [];
-    if (message) parts.push({ text: message });
-
-    if (images && Array.isArray(images)) {
-      images.forEach(img => {
-        if (typeof img === 'string' && img.startsWith('data:image')) {
-          const base64Data = img.split(',')[1];
-          const mimeType = img.split(';')[0].split(':')[1] || 'image/jpeg';
-          parts.push({
-            inline_data: { mime_type: mimeType, data: base64Data }
-          });
-        }
-      });
-    }
-
-    // قائمة النماذج الحديثة بالتريب
-    const candidateModels = [
-      'gemini-2.5-flash',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash-latest',
-      'gemini-1.5-pro'
-    ];
-
-    let lastError = null;
+    // أسماء النماذج المتاحة والمدعومة
+    const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
     let replyText = null;
+    let lastError = null;
 
-    // تجربة النماذج المتاحة حتى ينجح الطلب
-    for (const modelName of candidateModels) {
+    for (const model of models) {
       try {
         const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              contents: [{ parts }],
-              systemInstruction: {
-                parts: [{ text: `أنت مساعد OmniFix AI. الباقة الحالية: ${plan || 'العادية'}.` }]
-              }
+              contents: [{ parts: [{ text: message || 'مرحبا' }] }]
             })
           }
         );
 
         const data = await response.json();
-
         if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
           replyText = data.candidates[0].content.parts[0].text;
-          break;
+          break; // نجاح الاتصال وتلقي الرد
         } else {
-          lastError = data.error?.message || `خطأ (${response.status})`;
+          lastError = data.error?.message || `Status: ${response.status}`;
         }
       } catch (err) {
         lastError = err.message;
@@ -79,7 +53,7 @@ app.post('/api/chat', async (req, res) => {
     if (replyText) {
       return res.status(200).json({ reply: replyText });
     } else {
-      return res.status(500).json({ reply: `خطأ من جوجل: ${lastError}` });
+      return res.status(500).json({ reply: 'خطأ من جوجل: ' + lastError });
     }
 
   } catch (error) {
