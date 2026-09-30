@@ -11,35 +11,6 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// دالة المحاولة مع النماذج المتاحة
-async function askGemini(parts, apiKey) {
-  // قائمة النماذج المتاحة للتنقل بينها في حال وجود ضغط على أحدها
-  const models = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'];
-
-  for (const model of models) {
-    try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contents: [{ parts: parts }] })
-        }
-      );
-
-      const data = await response.json();
-
-      if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
-        return { success: true, text: data.candidates[0].content.parts[0].text };
-      }
-    } catch (e) {
-      continue;
-    }
-  }
-
-  return { success: false };
-}
-
 app.post('/api/chat', async (req, res) => {
   const { message, media } = req.body || {};
   const apiKey = process.env.GEMINI_API_KEY;
@@ -68,12 +39,24 @@ app.post('/api/chat', async (req, res) => {
 
     if (parts.length === 0) parts.push({ text: 'مرحبا' });
 
-    const result = await askGemini(parts, apiKey);
+    // استدعاء النموذج المباشر مع إصدار v1beta
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: parts }] })
+      }
+    );
 
-    if (result.success) {
-      return res.status(200).json({ reply: result.text });
+    const data = await response.json();
+
+    if (response.ok && data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+      return res.status(200).json({ reply: data.candidates[0].content.parts[0].text });
     } else {
-      return res.status(500).json({ reply: 'السيرفر مشغول حالياً، يرجى المحاولة بعد لحظات.' });
+      // إظهار سبب الخطأ بدقة لمعرفته فوراً إذا وجد
+      const errDetail = data.error?.message || 'خطأ في استجابة النموذج';
+      return res.status(500).json({ reply: 'عذراً: ' + errDetail });
     }
 
   } catch (error) {
