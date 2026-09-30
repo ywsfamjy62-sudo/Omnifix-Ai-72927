@@ -35,18 +35,18 @@ app.post('/api/chat', async (req, res) => {
       });
     }
 
-    // قائمة النماذج المرتبة حسب الأحدث والأفضل
+    // قائمة النماذج الحديثة بالتريب
     const candidateModels = [
-      'gemini-3.8-flash',
       'gemini-2.5-flash',
       'gemini-2.0-flash',
-      'gemini-1.5-flash'
+      'gemini-1.5-flash-latest',
+      'gemini-1.5-pro'
     ];
 
     let lastError = null;
     let replyText = null;
 
-    // التجربة على النماذج المتاحة بالتتابع حتى ينجح الطلب
+    // تجربة النماذج المتاحة حتى ينجح الطلب
     for (const modelName of candidateModels) {
       try {
         const response = await fetch(
@@ -67,7 +67,7 @@ app.post('/api/chat', async (req, res) => {
 
         if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
           replyText = data.candidates[0].content.parts[0].text;
-          break; // تم النجاح بنجاح والخروج من الحلقة
+          break;
         } else {
           lastError = data.error?.message || `خطأ (${response.status})`;
         }
