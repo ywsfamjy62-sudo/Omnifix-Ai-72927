@@ -37,10 +37,21 @@
     .toggle-btn { background: none; border: none; color: white; font-size: 22px; cursor: pointer; }
     .app-title { color: #3b82f6; font-weight: bold; font-size: 18px; }
 
-    .plan-badge { border: 1px solid #374151; padding: 5px 12px; border-radius: 8px; font-size: 12px; text-align: center; cursor: pointer; background: #1f2937; user-select: none; }
+    .plan-badge { 
+      border: 1px solid #374151; 
+      padding: 6px 12px; 
+      border-radius: 8px; 
+      font-size: 12px; 
+      text-align: center; 
+      cursor: pointer; 
+      background: #1f2937; 
+      user-select: none; 
+      z-index: 500;
+    }
     .plan-badge.active { border-color: #10b981; background: rgba(16, 185, 129, 0.15); }
-    .plan-badge span { display: block; color: #f59e0b; font-weight: bold; }
+    .plan-badge span { display: block; color: #f59e0b; font-weight: bold; pointer-events: none; }
     .plan-badge.active span { color: #10b981; }
+    .plan-badge small { pointer-events: none; color: #9ca3af; }
 
     .chat-box { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 15px; padding-bottom: 150px; }
     .hero-card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 25px; text-align: center; margin: auto; max-width: 380px; }
@@ -62,14 +73,13 @@
     .upload-btn { background: #374151; color: white; border: none; width: 42px; height: 42px; border-radius: 10px; font-size: 18px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
     .send-btn { background: #2563eb; color: white; border: none; padding: 0 18px; height: 42px; border-radius: 10px; font-weight: bold; cursor: pointer; }
 
-    /* Modal الباقات */
-    #plansModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 500; align-items: center; justify-content: center; padding: 15px; }
-    #plansModal.active { display: flex !important; }
-    .plans-container { background: #111827; border: 1px solid #1f2937; border-radius: 16px; width: 100%; max-width: 450px; max-height: 85vh; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+    #plansModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; align-items: center; justify-content: center; padding: 15px; }
+    #plansModal.open { display: flex !important; }
+    .plans-container { background: #111827; border: 1px solid #1f2937; border-radius: 16px; width: 100%; max-width: 420px; max-height: 85vh; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
     .plan-card { background: #1f2937; border: 1px solid #374151; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
     .plan-info { display: flex; justify-content: space-between; align-items: center; }
-    .plan-title { font-weight: bold; color: #3b82f6; font-size: 15px; }
-    .tag { background: #374151; padding: 2px 8px; border-radius: 6px; font-size: 11px; color: #f59e0b; }
+    .plan-title { font-weight: bold; color: #3b82f6; font-size: 14px; }
+    .tag { background: #374151; padding: 2px 6px; border-radius: 6px; font-size: 11px; color: #f59e0b; }
     .watch-ad-btn { background: #2563eb; color: white; border: none; padding: 8px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 13px; }
     .close-modal-btn { background: #ef4444; color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; margin-top: 10px; }
   </style>
@@ -90,7 +100,7 @@
     <header>
       <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
       <div class="app-title">OmniFix AI</div>
-      <div class="plan-badge" id="planBadge" onclick="openPlansModal()">
+      <div class="plan-badge" id="planBadge">
         <span id="currentPlanName">الباقة العادية</span>
         <small id="currentPlanStatus">انقر للتفعيل</small>
       </div>
@@ -102,7 +112,7 @@
       <div class="preview-list" id="previewList"></div>
       <div class="input-box">
         <input type="file" id="mediaInput" accept="image/*,video/*" multiple style="display: none;" onchange="handleMediaSelect(event)">
-        <button class="upload-btn" onclick="document.getElementById('mediaInput').click()" title="إضافة صور أو فيديوهات">➕</button>
+        <button class="upload-btn" onclick="document.getElementById('mediaInput').click()">➕</button>
         <input type="text" id="userInput" placeholder="اكتب رسالتك هنا..." onkeydown="if(event.key==='Enter') sendMessage()">
         <button class="send-btn" onclick="sendMessage()">إرسال</button>
       </div>
@@ -179,11 +189,11 @@
 
     function openPlansModal() {
       renderPlansList();
-      document.getElementById('plansModal').classList.add('active');
+      document.getElementById('plansModal').classList.add('open');
     }
 
     function closePlansModal() {
-      document.getElementById('plansModal').classList.remove('active');
+      document.getElementById('plansModal').classList.remove('open');
     }
 
     function watchAd(planId) {
@@ -422,6 +432,18 @@
       saveChats();
       renderMessages();
     }
+
+    // ربط الزر للضغط المباشر
+    document.addEventListener('DOMContentLoaded', function() {
+      const badge = document.getElementById('planBadge');
+      if (badge) {
+        badge.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          openPlansModal();
+        });
+      }
+    });
 
     setInterval(updatePlanBadge, 60000);
     init();
