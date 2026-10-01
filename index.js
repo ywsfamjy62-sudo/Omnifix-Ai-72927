@@ -39,9 +39,9 @@ app.post('/api/chat', async (req, res) => {
 
     if (parts.length === 0) parts.push({ text: 'مرحبا' });
 
-    // رابط الاستدعاء المباشر والمستقر لنماذج Gemini الحديثة
+    // استخدام المعرف المستقر المباشر مع API
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
