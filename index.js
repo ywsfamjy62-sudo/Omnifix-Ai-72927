@@ -12,47 +12,34 @@ app.get('/', (req, res) => {
 });
 
 app.post('/api/chat', async (req, res) => {
-  const { message, media } = req.body || {};
-  const apiKey = process.env.GEMINI_API_KEY;
+  const { message } = req.body || {};
+  const apiKey = process.env.OPENROUTER_API_KEY;
 
   if (!apiKey) {
-    return res.status(500).json({ reply: 'خطأ: لم يتم إضافة GEMINI_API_KEY في إعدادات Vercel!' });
+    return res.status(500).json({ reply: 'خطأ: لم يتم إضافة OPENROUTER_API_KEY في Vercel!' });
   }
 
   try {
-    const parts = [];
-    if (message) parts.push({ text: message });
-
-    if (media && Array.isArray(media)) {
-      media.forEach(item => {
-        const matches = item.data.match(/^data:(.+);base64,(.+)$/);
-        if (matches) {
-          parts.push({
-            inline_data: {
-              mime_type: matches[1],
-              data: matches[2]
-            }
-          });
-        }
-      });
-    }
-
-    if (parts.length === 0) parts.push({ text: 'مرحبا' });
-
-    // استخدام المعرف المستقر المباشر مع API
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: parts }] })
-      }
-    );
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://72927.vercel.app',
+        'X-Title': 'OmniFix AI'
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.0-flash-exp:free',
+        messages: [
+          { role: 'user', content: message || 'مرحبا' }
+        ]
+      })
+    });
 
     const data = await response.json();
 
-    if (response.ok && data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-      return res.status(200).json({ reply: data.candidates[0].content.parts[0].text });
+    if (response.ok && data.choices && data.choices[0]?.message?.content) {
+      return res.status(200).json({ reply: data.choices[0].message.content });
     } else {
       const errDetail = data.error?.message || 'تعذر استلام رد من النموذج.';
       return res.status(500).json({ reply: 'عذراً: ' + errDetail });
