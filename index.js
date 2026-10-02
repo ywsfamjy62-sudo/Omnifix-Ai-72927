@@ -29,8 +29,7 @@ app.post('/api/chat', async (req, res) => {
         'X-Title': 'OmniFix AI'
       },
       body: JSON.stringify({
-        // تغيير اسم النموذج ليكون نموذج مجاني ومستقر جداً في OpenRouter
-        model: 'meta-llama/llama-3.3-70b-instruct:free',
+        model: 'google/gemini-2.0-flash-exp:free',
         messages: [
           { role: 'user', content: message || 'مرحبا' }
         ]
