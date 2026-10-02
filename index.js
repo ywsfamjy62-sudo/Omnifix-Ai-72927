@@ -19,34 +19,45 @@ app.post('/api/chat', async (req, res) => {
     return res.status(500).json({ reply: 'خطأ: لم يتم إضافة OPENROUTER_API_KEY في Vercel!' });
   }
 
-  try {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://72927.vercel.app',
-        'X-Title': 'OmniFix AI'
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.0-flash-exp:free',
-        messages: [
-          { role: 'user', content: message || 'مرحبا' }
-        ]
-      })
-    });
+  const freeModels = [
+    'meta-llama/llama-3.3-70b-instruct:free',
+    'google/gemini-2.0-flash-lite-001:free',
+    'mistralai/mistral-7b-instruct:free'
+  ];
 
-    const data = await response.json();
+  let replyText = null;
 
-    if (response.ok && data.choices && data.choices[0]?.message?.content) {
-      return res.status(200).json({ reply: data.choices[0].message.content });
-    } else {
-      const errDetail = data.error?.message || 'تعذر استلام رد من النموذج.';
-      return res.status(500).json({ reply: 'عذراً: ' + errDetail });
+  for (const modelName of freeModels) {
+    try {
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://72927.vercel.app',
+          'X-Title': 'OmniFix AI'
+        },
+        body: JSON.stringify({
+          model: modelName,
+          messages: [{ role: 'user', content: message || 'مرحبا' }]
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.choices && data.choices[0]?.message?.content) {
+        replyText = data.choices[0].message.content;
+        break;
+      }
+    } catch (err) {
+      continue;
     }
+  }
 
-  } catch (error) {
-    return res.status(500).json({ reply: 'خطأ في الاتصال بالسيرفر: ' + error.message });
+  if (replyText) {
+    return res.status(200).json({ reply: replyText });
+  } else {
+    return res.status(500).json({ reply: 'عذراً، الخوادم المجانية مضغوطة حالياً، يرجى المحاولة بعد لحظات.' });
   }
 });
 
