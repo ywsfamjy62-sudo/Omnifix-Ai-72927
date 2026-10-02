@@ -37,7 +37,7 @@
     .toggle-btn { background: none; border: none; color: white; font-size: 22px; cursor: pointer; }
     .app-title { color: #3b82f6; font-weight: bold; font-size: 18px; }
 
-    /* تصميم زر الباقات */
+    /* تصميم زر الباقات للتحفيز والضغط المباشر */
     .plan-badge { 
       border: 1px solid #374151; 
       padding: 6px 12px; 
@@ -96,6 +96,7 @@
     <header>
       <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
       <div class="app-title">OmniFix AI</div>
+      <!-- زر الباقات مع خاصية الضغط المباشر onclick -->
       <div class="plan-badge" id="planBadge" onclick="openPlansModal()">
         <span id="currentPlanName">الباقة العادية</span>
         <small id="currentPlanStatus">انقر للتفعيل</small>
@@ -112,6 +113,7 @@
     </div>
   </div>
 
+  <!-- النافذة المنبثقة للباقات -->
   <div id="plansModal" onclick="if(event.target===this) closePlansModal()">
     <div class="plans-container">
       <h3 style="color:#3b82f6;">قائمة الباقات والترقيات</h3>
@@ -130,21 +132,12 @@
       adCounts: {}
     };
 
-    // توليد الـ 30 باقة تلقائياً لتطابق التصميم الأصلي تماماً
-    const plansConfig = Array.from({ length: 30 }, (_, i) => {
-      const num = i + 1;
-      if (num === 30) {
-        return { id: 'plan_30', name: 'باقة VIP الاحترافية', requiredAds: 30, durationHours: 12 };
-      } else if (num === 29) {
-        return { id: 'plan_29', name: 'باقة 29: باقة الذكاء الخارق', requiredAds: 29, durationHours: 12 };
-      } else if (num === 28) {
-        return { id: 'plan_28', name: 'باقة 28: OmniFix Ultra', requiredAds: 28, durationHours: 12 };
-      } else if (num === 27) {
-        return { id: 'plan_27', name: 'باقة 27: OmniFix Max', requiredAds: 27, durationHours: 12 };
-      } else {
-        return { id: `plan_${num}`, name: `باقة ${num}: الذكاء السريع`, requiredAds: num, durationHours: 12 };
-      }
-    });
+    const plansConfig = [
+      { id: 'plan_3', name: 'باقة 3: الذكاء السريع', requiredAds: 3, durationHours: 12 },
+      { id: 'plan_4', name: 'باقة 4: الباقة المتقدمة', requiredAds: 4, durationHours: 12 },
+      { id: 'plan_5', name: 'باقة 5: باقة الذكاء الخارق', requiredAds: 5, durationHours: 12 },
+      { id: 'plan_vip', name: 'باقة VIP الإحترافية', requiredAds: 30, durationHours: 12 }
+    ];
 
     function init() {
       checkPlanExpiry();
@@ -152,9 +145,6 @@
       if (chats.length === 0) createNewChat();
       else selectChat(chats[0].id);
       updatePlanBadge();
-      
-      // تحديث العدّاد بالثواني مباشرة لمنع توقف المؤقت
-      setInterval(updatePlanBadge, 1000);
     }
 
     function checkPlanExpiry() {
@@ -176,19 +166,14 @@
       const nameEl = document.getElementById('currentPlanName');
       const statusEl = document.getElementById('currentPlanStatus');
 
-      if (planData.activePlan && planData.expiryTime) {
+      if (planData.activePlan) {
         badge.classList.add('active');
         nameEl.textContent = planData.activePlan;
         
         const remainingMs = planData.expiryTime - Date.now();
-        if (remainingMs > 0) {
-          const hoursLeft = Math.floor(remainingMs / (1000 * 60 * 60));
-          const minsLeft = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
-          const secsLeft = Math.floor((remainingMs % (1000 * 60)) / 1000);
-          statusEl.textContent = `مفعلة (${hoursLeft}س ${minsLeft}د ${secsLeft}ث)`;
-        } else {
-          checkPlanExpiry();
-        }
+        const hoursLeft = Math.floor(remainingMs / (1000 * 60 * 60));
+        const minsLeft = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+        statusEl.textContent = `مفعّلة (${hoursLeft}س ${minsLeft}د)`;
       } else {
         badge.classList.remove('active');
         nameEl.textContent = 'الباقة العادية';
@@ -199,12 +184,16 @@
     function openPlansModal() {
       renderPlansList();
       const modal = document.getElementById('plansModal');
-      if (modal) modal.classList.add('open');
+      if (modal) {
+        modal.classList.add('open');
+      }
     }
 
     function closePlansModal() {
       const modal = document.getElementById('plansModal');
-      if (modal) modal.classList.remove('open');
+      if (modal) {
+        modal.classList.remove('open');
+      }
     }
 
     function watchAd(planId) {
@@ -219,9 +208,9 @@
         planData.activePlan = plan.name;
         planData.expiryTime = Date.now() + (plan.durationHours * 60 * 60 * 1000);
         planData.adCounts[planId] = 0;
-        alert(`🎉 سيتم فتح الإعلان (${plan.requiredAds}). عند اكتماله ستتفعل باقة ${plan.name} لمدة ${plan.durationHours} ساعة!`);
+        alert(`🎉 تم تفعيل ${plan.name} بنجاح!`);
       } else {
-        alert(`تم مشاهدة إعلان (${currentCount}/${plan.requiredAds}).`);
+        alert(`تم مشاهدة الإعلان (${currentCount}/${plan.requiredAds}).`);
       }
 
       savePlanData();
@@ -372,6 +361,7 @@
       renderMessages();
     }
 
+    setInterval(updatePlanBadge, 60000);
     window.onload = init;
   </script>
 </body>
